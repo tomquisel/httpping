@@ -4,7 +4,7 @@ Use this to ping an http server to measure latency between you and the server.
 This is useful for cases where the server doesn't respond to ICMP traffic.
 Httpping uses HTTP keep-alive, so TCP overhead is minimal.
 
-### Examples
+Examples:
 ```
     node client.js localhost:8888/
 ```
@@ -17,7 +17,7 @@ Httpping uses HTTP keep-alive, so TCP overhead is minimal.
 If you don't have an http server running on the other end, use this to quickly
 fire one up. This is especially useful for testing latency over an SSH tunnel.
 
-### Examples
+Examples:
 ```
     node server.js
 ```
