@@ -1,59 +1,104 @@
-// use this for keepalive instead
-// http://stackoverflow.com/questions/10895901/how-to-send-consecutive-requests-with-http-keep-alive-in-node-js
+"use strict";
 var http = require("http");
 var URL = require("url");
+var common = require('./common');
 
 function main() {
+    var url = getUrlFromArgs();
+    Pinger.start(url);
+}
+
+function getUrlFromArgs() {
     var args = process.argv.splice(2);
-    if (args.length == 0) {
-        console.log("Bad Args. Syntax: " + process.argv[0] + " " +
+    if (args.length === 0) {
+        common.log("Bad Args. Syntax: " + process.argv[0] + " " +
             process.argv[1] + " server:port/path");
         process.exit(0);
     }
-    urlBase = args[0];
-    url = "http://" + urlBase;
-    console.log("Pinging " + url + "...");
-    runOnePing(url);
+    return "http://" + args[0];
 }
 
-function runOnePing(url) {
-    options = URL.parse(url);
-    options['headers'] = {'Connection': 'keep-alive'};
-    console.log(options);
-    var start = process.hrtime();
-    var req = http.get(options, 
-        function (res) { pingHandler(res, url, start); } );
+var Pinger = {
+    start: function(url) {
+        Pinger._init();
+        console.log("type Ctrl+C to exit");
+        common.log("pinging " + url + "...");
+        var pingRunner = function() { Pinger.runOnePing(url); };
+        setInterval(pingRunner, 1000);
+    },
+    runOnePing: function(url) {
+        var options = URL.parse(url);
+        options.agent = Pinger._agent;
+        var start = process.hrtime();
+        var req = http.get(options, function (response) {
+            Pinger._pingHandler(response, url, start);
+        });
 
-    req.on('error', function(e) {
-        console.log('problem with request to ' + url + ' - ' + e.message);
-        runPingAgain(url);
-    });
-}
+        // only read data from the last request once the current request is on
+        // its way. Overlapping requests keeps the socket open.
+        Pinger._readLastResponse();
 
-function runPingAgain(url) {
-    setTimeout(function() { runOnePing(url); }, 1000);
-}
+        req.on('error', function(e) {
+            common.log('problem with request to ' + url + ' - ' + e.message);
+        });
+    },
 
-function diffToFloat(diff) {
-    return diff[0]/1000 + diff[1] / 1000000;
-}
-
-function pingHandler(res, url, start) {
-    diff = process.hrtime(start);
-    console.log("ping " + diffToFloat(diff));
-    if (res.statusCode != 200) {
-        console.log("status code = " + res.statusCode + " something went wrong.");
-        runPingAgain(url);
-        return;
-    }
-    var data = "";
-    res.on('data', function(chunk) { data += chunk; });
-    res.on('end', function() { responseDataHandler(data, url); });
-}
-
-function responseDataHandler(data, url) {
-    runPingAgain(url);
-}
-
+    _init: function() {
+        Pinger._initAgent();
+        Pinger._initSignalHandlers();
+    },
+    _initAgent: function() {
+        Pinger._agent = new http.Agent();
+        // this allows us to keep one socket open indefinitely
+        Pinger._agent.maxSockets = 1;
+    },
+    _initSignalHandlers: function() {
+        process.on('SIGINT', function() {
+            Pinger._printSummary();
+            process.exit();
+        });
+    },
+    _pingHandler: function(response, url, start) {
+        var hrtime = process.hrtime(start);
+        var pingInMS = Pinger._hrtimeToMS(hrtime);
+        Pinger._pingHistory.push(pingInMS);
+        common.log("ping took " + pingInMS + " ms");
+        if (response.statusCode != 200) {
+            common.log("status code = " + response.statusCode +
+                    " something went wrong.");
+            return;
+        }
+        Pinger._lastHttpResponse = response;
+    },
+    _hrtimeToMS: function(hrtime) {
+        return hrtime[0]*1000 + hrtime[1] / 1000000;
+    },
+    _readLastResponse: function() {
+        if (typeof(Pinger._lastHttpResponse) === 'undefined') {
+            return;
+        }
+        Pinger._readData(Pinger._lastHttpResponse);
+    },
+    _readData: function(httpResponse) {
+        var data = "";
+        httpResponse.on('data', function(chunk) { data += chunk; });
+    },
+    _printSummary: function() {
+        var n = Pinger._pingHistory.length;
+        var min = Math.min.apply(null, Pinger._pingHistory);
+        var max = Math.max.apply(null, Pinger._pingHistory);
+        var mean, sum=0;
+        Pinger._pingHistory.forEach(function(pingTime) {
+            sum += pingTime;
+        });
+        mean = sum / n;
+        console.log('\n' + n + ' pings, min: ' + min.toFixed(3) +
+                    ' ms mean: ' + mean.toFixed(3) + ' ms max: ' +
+                    max.toFixed(3) + ' ms');
+    },
+    _pingHistory: [],
+    _lastHttpResponse: undefined,
+    _agent: undefined,
+};
 
 main();
