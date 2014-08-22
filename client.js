@@ -23,26 +23,32 @@ var Pinger = {
         Pinger._init();
         console.log("type Ctrl+C to exit");
         common.log("pinging " + url + "...");
-        var pingRunner = function() { Pinger.runOnePing(url); };
-        setInterval(pingRunner, 1000);
+        Pinger._runPingLoop(url);
     },
-    runOnePing: function(url) {
-        var options = URL.parse(url);
-        options.agent = Pinger._agent;
-        var start = process.hrtime();
-        var req = http.get(options, function (response) {
+
+    _runPingLoop: function(url) {
+        var nextLoop = function() { Pinger._runPingLoop(url); };
+        Pinger._runOnePing(url, function(response, start) {
             Pinger._pingHandler(response, url, start);
+            setTimeout(nextLoop, Math.max(0, 1000 - Pinger._lastPingInMS));
         });
 
         // only read data from the last request once the current request is on
         // its way. Overlapping requests keeps the socket open.
         Pinger._readLastResponse();
 
+    },
+    _runOnePing: function(url, onResponse) {
+        var options = URL.parse(url);
+        options.agent = Pinger._agent;
+        var start = process.hrtime();
+        var req = http.get(options, function (response) {
+            onResponse(response, start);
+        });
         req.on('error', function(e) {
             common.log('problem with request to ' + url + ' - ' + e.message);
         });
     },
-
     _init: function() {
         Pinger._initAgent();
         Pinger._initSignalHandlers();
@@ -63,12 +69,8 @@ var Pinger = {
         var pingInMS = Pinger._hrtimeToMS(hrtime);
         Pinger._pingHistory.push(pingInMS);
         common.log("ping took " + pingInMS + " ms");
-        if (response.statusCode != 200) {
-            common.log("status code = " + response.statusCode +
-                    " something went wrong.");
-            return;
-        }
         Pinger._lastHttpResponse = response;
+        Pinger._lastPingInMS = pingInMS;
     },
     _hrtimeToMS: function(hrtime) {
         return hrtime[0]*1000 + hrtime[1] / 1000000;
@@ -93,7 +95,7 @@ var Pinger = {
         });
         mean = sum / n;
         console.log('\n' + n + ' pings, min: ' + min.toFixed(3) +
-                    ' ms mean: ' + mean.toFixed(3) + ' ms max: ' +
+                    ' ms, mean: ' + mean.toFixed(3) + ' ms, max: ' +
                     max.toFixed(3) + ' ms');
     },
     _pingHistory: [],
