@@ -74,7 +74,7 @@ var Pinger = {
         var hrtime = process.hrtime(start);
         var pingInMS = Pinger._hrtimeToMS(hrtime);
         Pinger._pingHistory.push(pingInMS);
-        common.log("ping took " + pingInMS + " ms");
+        common.log("ping took " + pingInMS.toFixed(3) + " ms");
         Pinger._lastHttpResponse = response;
         Pinger._lastPingInMS = pingInMS;
     },
