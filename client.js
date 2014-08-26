@@ -11,7 +11,7 @@ function main() {
 function getUrlFromArgs() {
     var args = process.argv.splice(2);
     if (args.length === 0) {
-        common.log("Bad Args. Syntax: " + process.argv[0] + " " +
+        console.log("Bad Args. Syntax: " + process.argv[0] + " " +
             process.argv[1] + " server:port/path");
         process.exit(0);
     }
