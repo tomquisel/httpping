@@ -2,6 +2,7 @@
 var http = require("http");
 var URL = require("url");
 var common = require('./common');
+var path = require("path");
 
 function main() {
     var url = getUrlFromArgs();
@@ -11,11 +12,16 @@ function main() {
 function getUrlFromArgs() {
     var args = process.argv.splice(2);
     if (args.length === 0) {
-        console.log("Bad Args. Syntax: " + process.argv[0] + " " +
-            process.argv[1] + " server:port/path");
-        process.exit(0);
+        badArgs();
     }
     return "http://" + args[0];
+}
+
+function badArgs() {
+    var relative_path = path.relative(process.cwd(), process.argv[1]);
+    var cmd = process.argv[0] + " " + relative_path;
+    console.log("Bad Args. Syntax: " + cmd + " server:port/path");
+    process.exit(0);
 }
 
 var Pinger = {
